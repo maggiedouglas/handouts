@@ -10,10 +10,10 @@ block, drug, control, placebo
 ## Gather 
 
 library(tidyr)
-tidy_trial <- ...(trial,
-  key = ...,
-  value = ...,
-  ...)
+tidy_trial <- gather(trial,
+  key = "treatment",
+  value = "response",
+  -block)
 
 ## Spread 
 
@@ -26,58 +26,68 @@ participant,   attr, val
 2          , income,  60
 ")
 
-tidy_survey <- ...(survey,
-  key = ...,
-  value = ...)
-
 tidy_survey <- spread(survey,
   key = attr,
-  value = val,
-  ...)
+  value = val)
+
+tidy_survey <- spread(survey,
+                      key = attr,
+                      value = val,
+                      fill = 0) # replace NA values with zero
 
 ## Sample Data 
 
 library(data.table)
-cbp <- fread('data/cbp15co.csv')
+cbp <- fread('data/cbp15co.csv',
+             colClasses = c(FIPSTATE = "character",
+                            FIPSCTY = "character"))
 
-cbp <- fread(
-  'data/cbp15co.csv',
-  ...,
-  ...)
+cbp <- fread('data/cbp15co.csv',
+  colClasses = c(FIPSTATE = "character",
+                 FIPSCTY = "character"),
+  na.strings = NULL)
 
-acs <- fread(
-  'data/ACS/sector_ACS_15_5YR_S2413.csv',
-  colClasses = c(FIPS = 'character'))
+acs <- fread('data/ACS/sector_ACS_15_5YR_S2413.csv',
+             colClasses = c(FIPS = 'character',
+                            median_income = 'numeric'))
 
 ## dplyr Functions 
 
-library(...)
-cbp2 <- filter(...,
-  ...,
-  !grepl('------', NAICS))
-
-library(...)
+library(dplyr)
 cbp2 <- filter(cbp,
-  ...)
+  grepl('----', NAICS),
+  !grepl('------', NAICS))
+# return rows with four dashes
+# exclude rows with six dashes
 
-cbp3 <- mutate(...,
-  ...)
+library(stringr)
+cbp2 <- filter(cbp,
+  str_detect(NAICS, '[0-9]{2}----')) 
+# return rows where first two digits are a number between 0-9
+# followed by four dashes
 
 cbp3 <- mutate(cbp2,
-  FIPS = str_c(FIPSTATE, FIPSCTY),
-  ...)
+  FIPS = str_c(FIPSTATE, FIPSCTY))
 
-...
+cbp3 <- mutate(cbp2,
+               FIPS = str_c(FIPSTATE, FIPSCTY))
+
+cbp3 <- mutate(cbp2,
+               FIPS = str_c(FIPSTATE, FIPSCTY),
+               NAICS = str_remove(NAICS, '-+')) 
+# '-+' means any number of minus signs that are repeated
+
+cbp <- cbp %>%
   filter(
     str_detect(NAICS, '[0-9]{2}----')
-  ) ...
+  ) %>%
   mutate(
     FIPS = str_c(FIPSTATE, FIPSCTY),
     NAICS = str_remove(NAICS, '-+')
   )
 
-...
-  ...(
+cbp <- cbp %>%
+  select(
     FIPS,
     NAICS,
     starts_with('N')
@@ -90,19 +100,47 @@ sector <- fread(
   colClasses = c(NAICS = 'character'))
 
 cbp <- cbp %>%
-  ...
+        inner_join(sector)
 
 ## Group By 
 
 cbp_grouped <- cbp %>%
-  ...
+  group_by(FIPS, Sector)
 
 ## Summarize 
 
 cbp <- cbp %>%
   group_by(FIPS, Sector) %>%
-  ...
-  ...
+  select(starts_with('N'), -NAICS) %>%
+  summarise_all(sum)
 
-acs_cbp <- ... %>%
-  ...
+acs_cbp <- cbp %>%
+  inner_join(acs)
+
+## Exercise 1
+
+long_survey <- tidy_survey %>%
+  gather(key = "variable",
+         value = "val",
+         -participant)
+
+## Exercise 2
+
+constr <- fread('data/cbp15co.csv',
+                colClasses = c(FIPSTATE = "character",
+                               FIPSCTY = "character")) %>%
+  filter(NAICS == "23----") %>%
+  select(FIPSTATE, FIPSCTY, NAICS, AP)
+
+## Exercise 3
+
+oilgas <- fread('data/cbp15co.csv',
+                colClasses = c(FIPSTATE = "character",
+                               FIPSCTY = "character")) %>%
+  filter(NAICS == "21----") %>%
+  #select(FIPSTATE, FIPSCTY, NAICS, EMP) %>%
+  group_by(FIPSTATE, FIPSCTY) %>%
+  summarise(EMP = sum(EMP)) %>%
+  summarise(counties = n(),
+            EMP = sum(EMP))
+
